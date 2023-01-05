@@ -29,6 +29,9 @@ eq  a b c           // a = b == c
 gt  a b c           // a = b > c
 lt  a b c           // a = b < c
 
+// memory
+load a b c          // memcpy(&a, b, c)
+stor a b c          // memcpy(a, &b, c)
 
 // utility
 prnt a              // putc(a, stdout)
