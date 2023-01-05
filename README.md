@@ -3,10 +3,11 @@
 ## Instructions
 
 ```asm
-
 mov  a b            // a = b
 cmov a b c          // if(c) a = b
 call a              // ret = ip; ip = a
+ret                 // return; ip = ret;
+exit
 
 // arithmetic
 add a b c           // a = b + c
