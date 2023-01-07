@@ -34,5 +34,6 @@ void flag_print_usage(
     FILE* stream, char* general_usage, flag_t* flags, uint32_t flags_len);
 
 char** flag_error_position(void);
+const char* flag_error_format(int error);
 
 #endif

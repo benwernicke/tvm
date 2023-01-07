@@ -162,6 +162,10 @@ int flag_parse(const int argc, char** argv, flag_t* flags, uint32_t flags_len,
     arg_iter = argv;
     arg_iter_end = argv + argc;
 
+    if (dest_argc) {
+        *dest_argc = 0;
+    }
+
     flag_error_t e = FLAG_ERROR_SUCCESS;
 
     for (; arg_iter != arg_iter_end; ++arg_iter) {
@@ -205,3 +209,13 @@ void flag_print_usage(
 }
 
 char** flag_error_position(void) { return arg_iter; }
+
+const char* flag_error_format(int error)
+{
+    static const char* strings[] = {
+        [FLAG_ERROR_SUCCESS] = "success",
+        [FLAG_ERROR_FLAG_UNKNOWN] = "flag unknown",
+        [FLAG_ERROR_ARG_UNKNOWN] = "argument unknown",
+    };
+    return strings[error];
+}
