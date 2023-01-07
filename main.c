@@ -6,8 +6,9 @@
 #include "flag.h"
 #include "assembler.h"
 
-static bool flag_help = 0;
-static bool flag_asm  = 0;
+static bool  flag_help   = 0;
+static bool  flag_asm    = 0;
+static char* flag_output = NULL;
 
 static flag_t flags[] = {
     {
@@ -23,6 +24,13 @@ static flag_t flags[] = {
         .description      = "assemble the given file into tvm byte code",
         .target           = &flag_asm,
         .type             = FLAG_BOOL,
+    },
+    {
+        .short_identifier = 'o',
+        .long_identifier  = "output",
+        .description      = "use argument as output file",
+        .target           = &flag_output,
+        .type             = FLAG_STR,
     },
 };
 
@@ -45,7 +53,7 @@ int main(int argc, char** argv)
     }
 
     if (flag_asm) {
-        int e = assemble("a.out", argv + 1, argc - 1);
+        int e = assemble(flag_output ? flag_output : "a.out", argv + 1, argc - 1);
         if (e) {
             fprintf(stderr, "Error: some error in assembler."
                     " More output should be above!\n");
