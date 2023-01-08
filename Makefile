@@ -2,7 +2,7 @@ DEBUG_FLAGS	:= -g -Wall -pedantic -O0 -fsanitize=address -fsanitize=leak -fsanit
 CFLAGS		:= ${DEBUG_FLAGS}
 CC	:= gcc
 
-tvm.out := def.o main.o flag.o assembler.o
+tvm.out := def.o main.o flag.o assembler.o label_map.o
 obj := ${tvm.out}
 out := tvm.out
 del := ${obj} ${out}

@@ -3,6 +3,6 @@
 
 #include <stdint.h>
 
-int assemble(char* target, char** src, uint64_t src_len);
+int assemble(char* target, char** src, uint32_t src_len);
 
 #endif // ASM_H
