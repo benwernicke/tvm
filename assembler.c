@@ -1,33 +1,11 @@
 #include "assembler.h"
 #include "def.h"
 #include "label_map.h"
+#include "err.h"
 
 #include <stddef.h>
 #include <stdio.h>
 #include <ctype.h>
-
-typedef enum {
-    ASM_ERR_OK = 0,
-    ASM_ERR_BAD_MALLOC,
-    ASM_ERR_FILE,
-} asm_err_t;
-
-static asm_err_t err = 0;
-
-#define ERROR_IF(b, v)              \
-        do {                        \
-            if (b) {                \
-                err = v;            \
-                goto handle_err;    \
-            }                       \
-        } while(0)
-
-#define ERROR_FORWARD()             \
-        do{                         \
-            if (err) {              \
-                goto handle_err;    \
-            }                       \
-        } while (0)
 
 typedef struct assemble_t assemble_t;
 struct assemble_t {
@@ -79,14 +57,14 @@ static void assemble_free(assemble_t* a)
 static assemble_t* assemble_create(void)
 {
     assemble_t* a = calloc(1, sizeof(*a));
-    ERROR_IF(!a, ASM_ERR_BAD_MALLOC);
+    ERR_IF(!a, ERR_BAD_MALLOC);
 
     a->label_map = label_map_create();
-    ERROR_IF(!a->label_map, ASM_ERR_BAD_MALLOC);
+    ERR_IF(!a->label_map, ERR_BAD_MALLOC);
 
     return a;
 
-handle_err:
+err_handling:
     assemble_free(a);
     return NULL;
 }
@@ -98,15 +76,15 @@ static assemble_t* assemble_single_file(char* path)
     char*       line = NULL;
 
     ass = assemble_create();
-    ERROR_FORWARD();
+    ERR_FORWARD();
     fh = fopen(path, "r");
-    ERROR_IF(!fh, ASM_ERR_FILE);
+    ERR_IF(!fh, ERR_BAD_FILE);
 
     uint64_t line_cap = 0;
     uint64_t rip = 0;
 
     for (; getline(&line, &line_cap, fh) > 0; ++rip ) {
-        ERROR_IF(!line, ASM_ERR_BAD_MALLOC);
+        ERR_IF(!line, ERR_BAD_MALLOC);
         char* s = trim_and_remove_comment(line);
 
         if(!*s) {
@@ -117,8 +95,8 @@ static assemble_t* assemble_single_file(char* path)
         first_word(s, &s, &e);
         if(*(e - 1) == ':') {
             *(--e) = 0;
-            ERROR_IF(label_map_insert(ass->label_map, s, rip), 
-                    ASM_ERR_BAD_MALLOC);
+            ERR_IF(label_map_insert(ass->label_map, s, rip), 
+                    ERR_BAD_MALLOC);
         } else {
             *e  = 0;
             if(strcmp(s, "@data")) {
@@ -160,7 +138,7 @@ static assemble_t* assemble_single_file(char* path)
 
     return ass;
 
-handle_err:
+err_handling:
     assemble_free(ass);
     if (fh) fclose(fh);
     free(line);
@@ -186,12 +164,13 @@ int assemble(char* target, char** src, uint32_t src_len)
     assemble_t* ass[src_len];
     for(; i < src_len; ++i) {
         ass[i] = assemble_single_file(src[i]);
-        if (err) {
-            fprintf(stderr, "Some error occured in assembler!\n");
-            exit(1);
-        }
+        ERR_FORWARD();
     }
     assemble_t* master = link(ass, src_len);
     to_file(target, master);
     return 0;
+
+err_handling:
+    // TODO free everything in ass
+    return -1;
 }
