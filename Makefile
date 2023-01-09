@@ -16,4 +16,6 @@ all: tvm.out
 	${CC} ${$@} ${CFLAGS} -o $@
 
 clean: 
-	touch ${del} && rm ${del}
+	rm *.o *.out
+
+.PHONY: clean all
