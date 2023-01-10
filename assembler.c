@@ -95,7 +95,9 @@ static assemble_t* assemble_single_file(char* path)
         first_word(s, &s, &e);
         if(*(e - 1) == ':') {
             *(--e) = 0;
-            ERR_IF(label_map_insert(ass->label_map, s, rip), 
+            char* key = strdup(s);
+            ERR_IF(!key, ERR_BAD_MALLOC);
+            ERR_IF(label_map_insert(ass->label_map, key, rip), 
                     ERR_BAD_MALLOC);
         } else {
             *e  = 0;
