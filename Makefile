@@ -1,4 +1,5 @@
-DEBUG_FLAGS	:= -g -Wall -pedantic -O0 -fsanitize=address -fsanitize=leak -fsanitize=undefined
+FLAGS		:= -pipe
+DEBUG_FLAGS	:= -g -Wall -pedantic -O0 -fsanitize=address -fsanitize=leak -fsanitize=undefined ${FLAGS}
 CFLAGS		:= ${DEBUG_FLAGS}
 CC	:= gcc
 

@@ -69,6 +69,270 @@ err_handling:
     return NULL;
 }
 
+static uint64_t* assemble_more(assemble_t* a)
+{
+    if (a->code_size >= a->code_cap) {
+        a->code_cap += 1;
+        a->code_cap <<= 1;
+        a->code = realloc(a->code, a->code_cap * sizeof(*a->code));
+        ERR_IF(!a->code, ERR_BAD_MALLOC);
+    }
+
+    return a->code + a->code_size++;
+
+    err_handling:
+    return NULL;
+}
+
+bool isliteral(char* s)
+{
+    // TODO hex support
+    if(!*s) {
+        return 0;
+    }
+
+    s += *s == '-';
+
+    for(; isdigit(*s); ++s) {  }
+    return !*s;
+}
+
+static inline uint64_t instr_arg_0_ctor(char* args, assemble_t* a) 
+{
+    if(*args) {
+        // TODO error
+    }
+    return ARG_N;
+}
+
+static uint64_t toliteral(char* s)
+{
+    // TODO hex support
+    uint64_t prefix = *s == '-' ? -1 : 1;
+    s += *s == '-';
+
+    uint64_t number = 0;
+    for(; *s; ++s) {
+        number *= 10;
+        number += *s - '0';
+    }
+    return  number * prefix;
+}
+
+static bool isregister(char* s)
+{
+    if(strcmp(s, "rip") == 0) {
+        return 1;
+    } else if (strcmp(s, "ret") == 0) {
+        return 1;
+    } else if (strcmp(s, "rsp") == 0) {
+        return 1;
+    } else if (strcmp(s, "r00") == 0) {
+        return 1;
+    } else if (strcmp(s, "r01") == 0) {
+        return 1;
+    } else if (strcmp(s, "r02") == 0) {
+        return 1;
+    } else if (strcmp(s, "r03") == 0) {
+        return 1;
+    } else if (strcmp(s, "r04") == 0) {
+        return 1;
+    } else if (strcmp(s, "r05") == 0) {
+        return 1;
+    } else if (strcmp(s, "r06") == 0) {
+        return 1;
+    } else if (strcmp(s, "r07") == 0) {
+        return 1;
+    } else if (strcmp(s, "r08") == 0) {
+        return 1;
+    } else if (strcmp(s, "r09") == 0) {
+        return 1;
+    } else if (strcmp(s, "r10") == 0) {
+        return 1;
+    } else if (strcmp(s, "r11") == 0) {
+        return 1;
+    } else if (strcmp(s, "r12") == 0) {
+        return 1;
+    } else if (strcmp(s, "r13") == 0) {
+        return 1;
+    } else if (strcmp(s, "r14") == 0) {
+        return 1;
+    } else if (strcmp(s, "r15") == 0) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+static inline uint64_t toregister(char* s)
+{
+    if(strcmp(s, "rip") == 0) {
+        return RIP;
+    } else if (strcmp(s, "ret") == 0) {
+        return RET;
+    } else if (strcmp(s, "rsp") == 0) {
+        return RSP;
+    } else if (strcmp(s, "r00") == 0) {
+        return R00;
+    } else if (strcmp(s, "r01") == 0) {
+        return R01;
+    } else if (strcmp(s, "r02") == 0) {
+        return R02;
+    } else if (strcmp(s, "r03") == 0) {
+        return R03;
+    } else if (strcmp(s, "r04") == 0) {
+        return R04;
+    } else if (strcmp(s, "r05") == 0) {
+        return R05;
+    } else if (strcmp(s, "r06") == 0) {
+        return R06;
+    } else if (strcmp(s, "r07") == 0) {
+        return R07;
+    } else if (strcmp(s, "r08") == 0) {
+        return R08;
+    } else if (strcmp(s, "r09") == 0) {
+        return R09;
+    } else if (strcmp(s, "r10") == 0) {
+        return R10;
+    } else if (strcmp(s, "r11") == 0) {
+        return R11;
+    } else if (strcmp(s, "r12") == 0) {
+        return R12;
+    } else if (strcmp(s, "r13") == 0) {
+        return R13;
+    } else if (strcmp(s, "r14") == 0) {
+        return R14;
+    } else if (strcmp(s, "r15") == 0) {
+        return R15;
+    }
+}
+
+static inline uint64_t instr_arg_1_ctor(char* args, assemble_t* a) 
+{ 
+    char* s;
+    char* e;
+    first_word(args, &s, &e);
+    if(!s) {
+        // TODO error
+    }
+    *e = 0;
+
+    uint64_t* n = assemble_more(a);
+    ERR_FORWARD();
+
+    bool arg_l = 0;
+
+    if (isliteral(s)) {
+        *n = toliteral(s);
+        arg_l = 1;
+    } else if (isregister(s)) {
+        *n = toregister(s);
+        arg_l = 0;
+    } else {
+        // TODO err
+    }
+
+    return arg_l ? ARG_L : ARG_R;
+
+err_handling:
+    return -1;
+}
+
+static inline uint64_t instr_arg_2_ctor(char* args, assemble_t* a) 
+{  
+    char* s;
+    char* e;
+    first_word(args, &s, &e);
+    if(!s || !*e) {
+        // TODO err
+    }
+    *e = 0;
+    bool a0_l = 0;
+    bool a1_l = 0;
+
+    uint64_t* n = assemble_more(a);
+    ERR_FORWARD();
+
+    if (isliteral(s)) {
+        *n = toliteral(s);
+        a0_l = 1;
+    } else if (isregister(s)) {
+        *n = toregister(s);
+        a0_l = 0;
+    } else {
+        // TODO err;
+    }
+
+    first_word(++e, &s, &e);
+    if(!s) {
+        // TODO err
+    }
+
+    n = assemble_more(a);
+    ERR_FORWARD();
+
+    if (isliteral(s)) {
+        *n = toliteral(s);
+        a1_l = 1;
+    } else if (isregister(s)) {
+        *n = toregister(s);
+        a1_l = 0;
+    } else {
+        // TODO err
+    }
+
+    if(a0_l && a1_l) {
+        return ARG_LL;
+    } else if (a0_l) {
+        return ARG_LR;
+    } else if (a1_l) {
+        return ARG_RL;
+    } else {
+        return ARG_RR;
+    }
+
+
+err_handling:
+    return -1;
+}
+
+static inline uint64_t instr_arg_3_ctor(char* args, assemble_t* a) 
+{
+    return -1;
+}
+
+static inline void instr_lea_ctor(char* args) {  }
+static inline void instr_mov_ctor(char* args) {  }
+static inline void instr_exit_ctor(char* args) {  }
+static inline void instr_ret_ctor(char* args) {  }
+static inline void instr_cmov_ctor(char* args) {  }
+static inline void instr_jmp_ctor(char* args) {  }
+static inline void instr_cjmp_ctor(char* args) {  }
+static inline void instr_push_ctor(char* args) {  }
+static inline void instr_pop_ctor(char* args) {  }
+static inline void instr_stor_ctor(char* args) {  }
+static inline void instr_load_ctor(char* args) {  }
+static inline void instr_add_ctor(char* args) {  }
+static inline void instr_sub_ctor(char* args) {  }
+static inline void instr_mul_ctor(char* args) {  }
+static inline void instr_div_ctor(char* args) {  }
+static inline void instr_mod_ctor(char* args) {  }
+static inline void instr_and_ctor(char* args) {  }
+static inline void instr_or_ctor(char* args) {  }
+static inline void instr_xor_ctor(char* args) {  }
+static inline void instr_comp_ctor(char* args) {  }
+static inline void instr_sl_ctor(char* args) {  }
+static inline void instr_sr_ctor(char* args) {  }
+static inline void instr_call_ctor(char* args) {  }
+static inline void instr_eq_ctor(char* args) {  }
+static inline void instr_neq_ctor(char* args) {  }
+static inline void instr_gt_ctor(char* args) {  }
+static inline void instr_geq_ctor(char* args) {  }
+static inline void instr_lt_ctor(char* args) {  }
+static inline void instr_leq_ctor(char* args) {  }
+static inline void instr_not_ctor(char* args) {  }
+static inline void instr_syscall_ctor(char* args) {  }
+
 static assemble_t* assemble_single_file(char* path)
 {
     FILE*       fh   = NULL;
@@ -102,6 +366,7 @@ static assemble_t* assemble_single_file(char* path)
         } else {
             *e  = 0;
             if(strcmp(s, "@data")) {
+                // TODO
             } else if (strcmp(s, "lea")  == 0) {
             } else if (strcmp(s, "mov")  == 0) {
             } else if (strcmp(s, "exit") == 0) {
@@ -162,6 +427,7 @@ static void to_file(char* target, assemble_t* ass)
 
 int assemble(char* target, char** src, uint32_t src_len)
 {
+    // TODO err if src_len == 0
     uint32_t i = 0;
     assemble_t* ass[src_len];
     for(; i < src_len; ++i) {
