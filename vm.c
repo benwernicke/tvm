@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #include "def.h"
 #include "err.h"
@@ -13,20 +15,29 @@ static char stack[STACK_SIZE] = { 0 };
 
 typedef struct program_t program_t;
 struct program_t {
-    uint64_t  size;
+    uint64_t  code_size;
     uint64_t* code;
+    uint64_t  data_size;
+    char*     data;
 };
 
 static program_t program = {0};
 
-void load_file(char* path)
+static void load_file(char* path)
 {
     FILE* f = fopen(path, "rb");
     ERR_IF(!f, ERR_FILE);
-    fread(&program.size, 1, sizeof(program.size), f);
-    program.code = malloc(program.size * sizeof(*program.code));
+    fread(&program.code_size, 1, sizeof(program.code_size), f);
+    fread(&program.data_size, 1, sizeof(program.data_size), f);
+    program.code = malloc(program.code_size * sizeof(*program.code));
     ERR_IF(!program.code, ERR_BAD_MALLOC);
-    fread(program.code, program.size, sizeof(*program.code), f);
+    fread(program.code, program.code_size, sizeof(*program.code), f);
+
+    if (program.data_size) {
+        program.data = malloc(program.data_size * sizeof(*program.data));
+        ERR_IF(!program.data, ERR_BAD_MALLOC);
+        fread(program.data, program.data_size, sizeof(*program.data), f);
+    }
     fclose(f);
 
 error:
@@ -35,7 +46,6 @@ error:
 
 static instr_t instr_from_bin(uint64_t b)
 {
-    // TODO err management
     const uint64_t* iter = instr_bin_map;
     const uint64_t* end  = instr_bin_map + INSTR_NUM;
     for (; iter != end; ++iter) {
@@ -159,7 +169,7 @@ void arg_format(arg_t arg_type, uint64_t* arg_bin)
 static void dump_asm(void)
 {
     uint64_t i;
-    for (i = 0; i < program.size; ++i) {
+    for (i = 0; i < program.code_size; ++i) {
         instr_t  instr      = instr_from_bin(program.code[i] & INSTR_MASK);
         arg_t    arg_type   = program.code[i] & ARG_MASK;
         uint64_t arg_bin[3] = {0};
@@ -178,7 +188,7 @@ static void run(void)
 {
     bool running = 1;
     uint64_t exit_code = 0;
-    for (; running && reg[RIP] < program.size; ++reg[RIP]) {
+    for (; running && reg[RIP] < program.code_size; ++reg[RIP]) {
         instr_t instr = instr_from_bin(program.code[reg[RIP]] & INSTR_MASK);
         arg_t   arg   = program.code[reg[RIP]] & ARG_MASK;
 
@@ -264,7 +274,11 @@ static void run(void)
             }
             break;
         case INSTR_LEA:
-            // TODO
+            if (*b >= program.data_size) {
+                fprintf(stderr, "Error: static storage overflow\n");
+                ERR(ERR_VM);
+            }
+            *a = (uint64_t)(program.data + *b);
             break;
         case INSTR_JMP:
             reg[RIP] = *a;
@@ -282,20 +296,31 @@ static void run(void)
             reg[RIP] = reg[RET];
             break;
         case INSTR_PUSH:
-            // TODO CHECK underflow
+            if ((char*)(reg[RSP] - 8) < stack) {
+                fprintf(stderr, "Error: stack overflow\n");
+                ERR(ERR_VM);
+            }
             reg[RSP] -= 8;
             *(uint64_t*)reg[RSP] = *a;
             break;
         case INSTR_POP:
-            // TODO check overflow
+            if ((char*)(reg[RSP] + 8) > stack + STACK_SIZE) {
+                fprintf(stderr, "Error: stack underflow\n");
+                ERR(ERR_VM);
+            }
+
             *a = *(uint64_t*)reg[RSP];
             reg[RSP] += 8;
             break;
         case INSTR_STOR:
-            // TODO
+            if (arg == ARG_RLL || arg == ARG_RLR) {
+                memcpy((void*)*a, b, *c);
+            } else {
+                memcpy((void*)*a, (void*)*b, *c);
+            }
             break;
         case INSTR_LOAD:
-            // TODO
+            memcpy(a, (void*)*b, *c);
             break;
         case INSTR_ADD:
             *a = *b + *c;
@@ -356,7 +381,7 @@ static void run(void)
             exit_code = *a;
             break;
         case INSTR_SYSCALL:
-            // TODO
+            reg[R00] = syscall(reg[R00], reg[R01], reg[R02], reg[R03], reg[R04], reg[R05]);
             break;
         case INSTR_PRNT:
             putc(*a, stdout);

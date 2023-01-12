@@ -7,16 +7,19 @@
 #include "def.h"
 #include "err.h"
 #include "flag.h"
-#include "label_map.h"
+#include "map.h"
 #include "label_buf.h"
 
 typedef struct asm_t asm_t;
 struct asm_t {
-    uint64_t* code;
-    uint64_t  code_size;
-    uint64_t  code_cap;
-    label_map_t* label_map;
+    uint64_t*    code;
+    uint64_t     code_size;
+    uint64_t     code_cap;
+    map_t*       label_map;
     label_buf_t* label_buf;
+    char*        data;
+    uint64_t     data_size;
+    uint64_t     data_cap;
 };
 
 static uint64_t* asm_more(asm_t* a)
@@ -60,8 +63,31 @@ static void get_token(uint64_t* line_number, uint64_t* ip, char* s, char** start
     *end = s;
 }
 
+static bool token_is_char_literal(char* s, char* e)
+{
+    if (e - s == 3) {
+        if (s[0] != '\'' || s[2] != '\'') {
+            return 0;
+        }
+        return 1;
+    }
+
+    if (e - s == 4) {
+        if (s[0] != '\'' || s[3] != '\'' || s[1] != '\\') {
+            return 0;
+        }
+        return 1;
+    }
+
+    return 0;
+}
+
 static bool token_is_literal(char* s, char* e)
 {
+    if (token_is_char_literal(s, e)) {
+        return 1;
+    }
+
     for (; isdigit(*s) && s != e; ++s) {  }
     return s == e;
 }
@@ -94,6 +120,131 @@ static bool token_is_instruction(char* s, char* e)
     }
     *e = t;
     return instr_iter != instr_end;
+}
+
+static bool token_is_type_identifier(char* s, char* e)
+{
+    if (strncmp(s, "char", 4) == 0) {
+        if (s[4] == '[') {
+            return *(e - 1) == ']';
+        } else if (e - s == 4) {
+            return 1;
+        } else {
+            ERR(ERR_ASSEMBLER);
+        }
+    } else if(strncmp(s, "u8", 2) == 0) {
+        if (s[2] == '[') {
+            return *(e - 1) == ']';
+        } else if (e - s == 2) {
+            return 1;
+        } else {
+            ERR(ERR_ASSEMBLER);
+        }
+    } else if(strncmp(s, "u16", 3) == 0) {
+        if (s[3] == '[') {
+            return *(e - 1) == ']';
+        } else if (e - s == 3) {
+            return 1;
+        } else {
+            ERR(ERR_ASSEMBLER);
+        }
+    } else if(strncmp(s, "u32", 3) == 0) {
+        if (s[3] == '[') {
+            return *(e - 1) == ']';
+        } else if (e - s == 3) {
+            return 1;
+        } else {
+            ERR(ERR_ASSEMBLER);
+        }
+    } else if(strncmp(s, "u64", 3) == 0) {
+        if (s[3] == '[') {
+            return *(e - 1) == ']';
+        } else if (e - s == 3) {
+            return 1;
+        } else {
+            ERR(ERR_ASSEMBLER);
+        }
+    }
+
+error:
+    return 0;
+}
+
+static uint64_t token_get_type_identifier_size(char* s, char* e)
+{
+    uint64_t r = 0;
+
+    if (strncmp(s, "char", 4) == 0) {
+        if (s[4] == '[') {
+            s += 5;
+            e -= 1;
+            *e = 0;
+            r = 1 * atol(s);
+        } else {
+            r = 1;
+        }
+        goto end;
+    } else if(strncmp(s, "u8", 2) == 0) {
+        if (s[2] == '[') {
+            s += 3;
+            e -= 1;
+            *e = 0;
+            r = 1 * atol(s);
+        } else {
+            r = 1;
+        }
+        goto end;
+    } else if(strncmp(s, "u16", 3) == 0) {
+        if (s[3] == '[') {
+            s += 4;
+            e -= 1;
+            *e = 0;
+            r = 2 * atol(s);
+        } else {
+            r = 1;
+        }
+        goto end;
+    } else if(strncmp(s, "u32", 3) == 0) {
+        if (s[3] == '[') {
+            s += 4;
+            e -= 1;
+            *e = 0;
+            r = 4 * atol(s);
+        } else {
+            r = 1;
+        }
+        goto end;
+    } else if(strncmp(s, "u64", 3) == 0) {
+        if (s[3] == '[') {
+            s += 4;
+            e -= 1;
+            *e = 0;
+            r = 8 * atol(s);
+        } else {
+            r = 1;
+        }
+        goto end;
+    }
+
+end:
+    return r;
+
+}
+
+static char* asm_data_more(asm_t* a, uint64_t size)
+{
+    if (a->data_size + size >= a->data_cap) {
+        a->data_cap <<= 1;
+        a->data_cap += size;
+        a->data = realloc(a->data, a->data_cap);
+        ERR_IF(!a->data, ERR_BAD_MALLOC);
+    }
+    char* r = &a->data[a->data_size];
+    a->data_size += size;
+    return r;
+
+error:
+    return NULL;
 }
 
 static instr_t token_get_instruction(char* s, char* e)
@@ -133,6 +284,16 @@ static uint64_t token_get_register_bin(char* s, char* e)
 
 static uint64_t token_get_literal(char* s, char* e)
 {
+    if (token_is_char_literal(s, e)) {
+        if (e - s == 3) {
+            return s[1];
+        }
+        switch (s[2]) {
+        case 'n': return '\n';
+        case '0': return '\0';
+        }
+    }
+
     uint64_t sum = 0;
     for (; s != e; ++s) {
         sum *= 10;
@@ -172,11 +333,11 @@ static void asm_free(asm_t* a)
 {
     if (a) {
         {
-            uintptr_t iter = label_map_begin(a->label_map);
-            for (; iter != label_map_end(a->label_map); iter = label_map_next(a->label_map, iter) ) {
-                free(*label_map_iter_key(a->label_map, iter));
+            uintptr_t iter = map_begin(a->label_map);
+            for (; iter != map_end(a->label_map); iter = map_next(a->label_map, iter) ) {
+                free(*map_iter_key(a->label_map, iter));
             }
-            label_map_free(a->label_map);
+            map_free(a->label_map);
         }
         {
             label_buf_pair_t* iter = label_buf_begin(a->label_buf);
@@ -186,6 +347,7 @@ static void asm_free(asm_t* a)
             }
             label_buf_free(a->label_buf);
         }
+        free(a->data);
         free(a->code);
         free(a);
     }
@@ -201,13 +363,71 @@ static void* rptr_get(void* b, void* t)
     return (void*)((uintptr_t)b + (uintptr_t)t + 1);
 }
 
+static void asm_data_init(uint64_t* line_number, char* data, uint64_t data_size, char* s, char** start, char** end)
+{
+    s = trim_comments(line_number, s);
+    if (!*s) {
+        fprintf(stderr, "Error: expected storage initializer and got nothing\n");
+        fprintf(stderr, "\tat line %lu\n", *line_number);
+        ERR(ERR_ASSEMBLER);
+    }
+
+    if (*s == '"') {
+        s += 1;
+        *start = s;
+        for(; *s && *s != '\n' && *s != '"'; ++s) { }
+        *end = s;
+        if (!*s || *s == '\n') {
+            fprintf(stderr, "Error: no matching '\"'\n");
+            fprintf(stderr, "\tat line %lu\n", *line_number);
+            ERR(ERR_ASSEMBLER);
+        }
+        if (end - start > data_size) {
+            fprintf(stderr, "Error: storage is not big enough\n");
+            fprintf(stderr, "\tat line %lu\n", *line_number);
+            ERR(ERR_ASSEMBLER);
+        }
+        char* s = *start;
+        for (; s != *end; ++s) {
+            if (*s == '\\') {
+                switch(*(++s)) {
+                case 'n': 
+                    *data++ = '\n';
+                    break;
+                case '0':
+                    *data++ = '\0';
+                    break;
+                }
+            } else {
+                *data++ = *s;
+            }
+        }
+        *end += 1;
+    } else {
+        *start = s;
+        for (; *s && !isspace(*s); ++s) {  }
+        *end = s;
+        char t = **end;
+        **end = 0;
+        if (strcmp(*start, "default") == 0) {
+            memset(data, 0, data_size);
+        }
+        **end = t;
+    }
+
+    return;
+
+error:
+    return;
+}
+
 static asm_t* asm_from_file(char* path)
 {
     char*    file_content = NULL;
     uint64_t line_number  = 1;
     asm_t* a = calloc(1, sizeof(*a));
     ERR_IF(!a, ERR_BAD_MALLOC);
-    a->label_map = label_map_create();
+    a->label_map = map_create();
     a->label_buf = label_buf_create();
     ERR_IF(!a->label_map || !a->label_buf, ERR_BAD_MALLOC);
 
@@ -319,42 +539,57 @@ static asm_t* asm_from_file(char* path)
                 }
             }
         } else if (token_is_label(s, e)) {
+            bool is_mem_label = 0;
             char* l = NULL;
-            e -= 1;
-            *e = 0;
+
+            e  -= 1;
+            *e  = 0;
             ip -= 1; // get_token advances ip but label is not an instruction
 
             // file private label
             if(*s == ':') {
+                is_mem_label = s[1] == '@';
                 l = malloc(strlen(path) + (e - s) + 1);
                 ERR_IF(!l, ERR_BAD_MALLOC);
                 *l = 0;
                 strcat(l, path);
-                strcat(l, s);
-                int e = label_map_insert(a->label_map, l, ip - 1);
-                ERR_IF(e, ERR_BAD_MALLOC);
                 last_label = l;
 
             // function private label
             } else if (*s == '.') {
+                is_mem_label = s[1] == '@';
                 l = calloc(1, strlen(last_label) + (e - s) + 1);
                 ERR_IF(!l, ERR_BAD_MALLOC);
                 *l = 0;
                 strcat(l, last_label);
-                strcat(l, s);
-                int e = label_map_insert(a->label_map, l, ip - 1);
-                ERR_IF(e, ERR_BAD_MALLOC);
 
             // file public label
             } else {
+                is_mem_label = s[0] == '@';
                 l = calloc(1, (e - s) + 1);
                 ERR_IF(!l, ERR_BAD_MALLOC);
-                strcpy(l, s);
-                int e = label_map_insert(a->label_map, l, ip - 1);
-                ERR_IF(e, ERR_BAD_MALLOC);
                 last_label = l;
             }
+            strcat(l, s);
             e += 1;
+            if (is_mem_label) {
+                get_token(&line_number, &ip, e, &s, &e);
+                ip -= 1; // we dont need ip
+                if (!token_is_type_identifier(s, e)) {
+                    fprintf(stderr, "Error: expected type identifier after storage label '%s'\n", l);
+                    fprintf(stderr, "\tat line %lu\n", line_number);
+                    ERR(ERR_ASSEMBLER);
+                }
+                uint64_t mem_size = token_get_type_identifier_size(s, e);
+
+                int err = map_insert(a->label_map, l, a->data_size);
+                char* d = asm_data_more(a, mem_size);
+                ERR_IF(!d || err, ERR_BAD_MALLOC);
+                asm_data_init(&line_number, d, mem_size, e, &s, &e);
+            } else {
+                int err = map_insert(a->label_map, l, ip - 1);
+                ERR_IF(err, ERR_BAD_MALLOC);
+            }
         } else {
             *e = 0;
             fprintf(stderr, "Error: '%s' is not a valid instruction nor label definition\n", s);
@@ -371,7 +606,7 @@ static asm_t* asm_from_file(char* path)
         label_buf_pair_t* iter = label_buf_begin(a->label_buf);
         label_buf_pair_t* end  = label_buf_end(a->label_buf);
         for (; iter != end; ++iter) {
-            uint64_t* p = label_map_get(a->label_map, iter->label);
+            uint64_t* p = map_get(a->label_map, iter->label);
             if (!p) {
                 fprintf(stderr, "Error: unknown label '%s'\n", iter->label);
                 // TODO line number
@@ -396,7 +631,13 @@ static void asm_to_file(asm_t* a, char* path)
     FILE* f = fopen(path, "wb");
     ERR_IF(!f, ERR_FILE);
     fwrite(&a->code_size, 1, sizeof(a->code_size), f);
+    fwrite(&a->data_size, 1, sizeof(a->data_size), f);
     fwrite(a->code, sizeof(*a->code), a->code_size, f);
+
+    if (a->data_size) {
+        fwrite(a->data, sizeof(*a->data), a->data_size, f);
+    }
+
     fclose(f);
     return;
 

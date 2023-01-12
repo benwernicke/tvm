@@ -1,7 +1,3 @@
-out
-build/*
-beaver
-
 # Prerequisites
 *.d
 

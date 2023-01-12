@@ -3,7 +3,7 @@ DEBUG_FLAGS := -g -Wall -pedantic -fsanitize=address -fsanitize=leak -fsanitize=
 CC      	:= gcc
 CFLAGS  	:= ${FLAGS} ${DEBUG_FLAGS}
 
-asm.out 	:= asm.o def.o err.o flag.o label_map.o label_buf.o
+asm.out 	:= asm.o def.o err.o flag.o map.o label_buf.o
 vm.out		:= vm.o def.o err.o flag.o
 
 obj     	:= ${asm.out} ${vm.out}

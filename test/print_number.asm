@@ -4,7 +4,7 @@ print_number:
     push  r01
     neq   r01 r00 0         
     cjmp  .L1 r01               # if r00 == 0
-        prnt 48
+        prnt '0'
         jmp  .end
     .L1:                        # else
         push ret
@@ -21,7 +21,7 @@ print_number:
     eq   r01 r00 0
     cjmp .helper.end r01            # if r00 == 0 goto helper.end
     mod r01 r00 10
-    add r01 r01 48
+    add r01 r01 '0'
     div r00 r00 10
     push ret
     call .helper
@@ -36,5 +36,5 @@ print_number:
 main:
     mov r00 69
     call print_number
-    prnt 10
+    prnt '\n'
     exit 0
