@@ -1,2 +1,2 @@
 # tvm
-Tiny VM
+tiny virtual machine

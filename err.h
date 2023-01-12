@@ -1,35 +1,42 @@
 #ifndef ERR_H
 #define ERR_H
 
+#include <stdint.h>
+#include <stdio.h>
+
 typedef enum {
     ERR_OK = 0,
     ERR_BAD_MALLOC,
-    ERR_BAD_FILE,
+    ERR_ASSEMBLER,
+    ERR_FILE,
+    ERR_VM,
 } err_t;
 
-void err_set(err_t e);
-const char* err_format(err_t e);
 err_t err_get(void);
-
-#define ERR(e)                  \
-    do {                        \
-        err_set(e) ;            \
-        goto err_handling;      \
-    } while (0)
-
-#define ERR_IF(b, e)            \
-    do {                        \
-        if (b) {                \
-            ERR(e);             \
-        }                       \
-    } while (0)
+void  err_set(err_t e);
+void  err_format(FILE* stream);
 
 #define ERR_FORWARD()               \
     do {                            \
         if (err_get() != ERR_OK) {  \
-            goto err_handling;      \
+            goto error;             \
         }                           \
     } while (0)
 
+#define ERR(e)          \
+    do {                \
+        err_set(e);     \
+        goto error;     \
+    } while (0)
+
+#define ERR_IF(b, e)    \
+    do {                \
+        if (b) {        \
+            ERR(e);     \
+        }               \
+    }while(0)
+
+extern const char* err_str_map[];
+extern const uint64_t err_maps_size;
 
 #endif

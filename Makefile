@@ -1,22 +1,22 @@
-FLAGS		:= -pipe
-DEBUG_FLAGS	:= -g -Wall -pedantic -O0 -fsanitize=address -fsanitize=leak -fsanitize=undefined ${FLAGS}
-CFLAGS		:= ${DEBUG_FLAGS}
-CC	:= gcc
+FLAGS   	:= -pipe
+DEBUG_FLAGS := -g -Wall -pedantic -fsanitize=address -fsanitize=leak -fsanitize=undefined
+CC      	:= gcc
+CFLAGS  	:= ${FLAGS} ${DEBUG_FLAGS}
 
-tvm.out := def.o main.o flag.o assembler.o label_map.o err.o
-obj := ${tvm.out}
-out := tvm.out
-del := ${obj} ${out}
+asm.out 	:= asm.o def.o err.o flag.o label_map.o label_buf.o
+vm.out		:= vm.o def.o err.o flag.o
 
-all: tvm.out
+obj     	:= ${asm.out} ${vm.out}
+
+all: asm.out vm.out
 
 %.o: %.c
-	${CC} $< ${CFLAGS} -c -o $@
+	${CC} ${CFLAGS} -c -o $@ $<
 
 %.out: ${obj}
-	${CC} ${$@} ${CFLAGS} -o $@
+	${CC} ${CFLAGS} -o $@ ${$@}
 
-clean: 
-	rm *.o *.out
+clean:
+	rm *.o *.out *.log
 
-.PHONY: clean all
+.PHONY: clean
