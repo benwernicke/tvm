@@ -41,7 +41,7 @@ void err_format(FILE* stream)
         fprintf(stream, "Error: assembler failed! Additional output above\n");
     break;
     case ERR_FILE: 
-        fprintf(stream, "Error: failed file operation");
+        fprintf(stream, "Error: failed file operation\n");
         fprintf(stream, "\t%s\n", strerror(errno));
     break;
     case ERR_VM: 
