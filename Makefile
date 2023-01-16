@@ -17,6 +17,6 @@ all: asm.out vm.out
 	${CC} ${CFLAGS} -o $@ ${$@}
 
 clean:
-	rm *.o *.out *.log
+	rm -f *.o *.out *.log
 
 .PHONY: clean

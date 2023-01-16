@@ -184,217 +184,400 @@ static void dump_asm(void)
     }
 }
 
+static bool run_curr_instr(uint64_t* exit_code)
+{
+    instr_t instr = instr_from_bin(program.code[reg[RIP]] & INSTR_MASK);
+    arg_t   arg   = program.code[reg[RIP]] & ARG_MASK;
+
+    uint64_t* a = NULL;
+    uint64_t* b = NULL;
+    uint64_t* c = NULL;
+
+    switch (arg) {
+    case ARG_N: break;
+    case ARG_L: 
+        a = &program.code[++reg[RIP]];
+        break;
+    case ARG_R: 
+        a = &reg[program.code[++reg[RIP]]];
+        break;
+    case ARG_LL: 
+        a = &program.code[++reg[RIP]];
+        b = &program.code[++reg[RIP]];
+        break;
+    case ARG_RL: 
+        a = &reg[program.code[++reg[RIP]]];
+        b = &program.code[++reg[RIP]];
+        break;
+    case ARG_LR:
+        a = &program.code[++reg[RIP]];
+        b = &reg[program.code[++reg[RIP]]];
+        break;
+    case ARG_RR:
+        a = &reg[program.code[++reg[RIP]]];
+        b = &reg[program.code[++reg[RIP]]];
+        break;
+    case ARG_LLR:
+        a = &program.code[++reg[RIP]];
+        b = &program.code[++reg[RIP]];
+        c = &reg[program.code[++reg[RIP]]];
+        break;
+    case ARG_RLR:
+        a = &program.code[++reg[RIP]];
+        b = &reg[program.code[++reg[RIP]]];
+        c = &program.code[++reg[RIP]];
+        break;
+    case ARG_LRR:
+        a = &program.code[++reg[RIP]];
+        b = &reg[program.code[++reg[RIP]]];
+        c = &reg[program.code[++reg[RIP]]];
+        break;
+    case ARG_RRR:
+        a = &reg[program.code[++reg[RIP]]];
+        b = &reg[program.code[++reg[RIP]]];
+        c = &reg[program.code[++reg[RIP]]];
+        break;
+    case ARG_LLL:
+        a = &program.code[++reg[RIP]];
+        b = &program.code[++reg[RIP]];
+        c = &program.code[++reg[RIP]];
+        break;
+    case ARG_RLL:
+        a = &reg[program.code[++reg[RIP]]];
+        b = &program.code[++reg[RIP]];
+        c = &program.code[++reg[RIP]];
+        break;
+    case ARG_LRL:
+        a = &program.code[++reg[RIP]];
+        b = &reg[program.code[++reg[RIP]]];
+        c = &program.code[++reg[RIP]];
+        break;
+    case ARG_RRL:
+        a = &reg[program.code[++reg[RIP]]];
+        b = &reg[program.code[++reg[RIP]]];
+        c = &program.code[++reg[RIP]];
+        break;
+    default:
+        ERR(ERR_VM);
+    }
+
+    switch (instr) {
+    case INSTR_MOV:
+        *a = *b;
+        break;
+    case INSTR_CMOV:
+        if (*c) {
+            *a = *b;
+        }
+        break;
+    case INSTR_LEA:
+        if (*b >= program.data_size) {
+            fprintf(stderr, "Error: static storage overflow\n");
+            ERR(ERR_VM);
+        }
+        *a = (uint64_t)(program.data + *b);
+        break;
+    case INSTR_JMP:
+        reg[RIP] = *a;
+        break;
+    case INSTR_CJMP:
+        if (*b) {
+            reg[RIP] = *a;
+        }
+        break;
+    case INSTR_CALL:
+        reg[RET] = reg[RIP];
+        reg[RIP] = *a;
+        break;
+    case INSTR_RETURN:
+        reg[RIP] = reg[RET];
+        break;
+    case INSTR_PUSH:
+        if ((char*)(reg[RSP] - 8) < stack) {
+            fprintf(stderr, "Error: stack overflow\n");
+            ERR(ERR_VM);
+        }
+        reg[RSP] -= 8;
+        *(uint64_t*)reg[RSP] = *a;
+        break;
+    case INSTR_POP:
+        if ((char*)(reg[RSP] + 8) > stack + STACK_SIZE) {
+            fprintf(stderr, "Error: stack underflow\n");
+            ERR(ERR_VM);
+        }
+
+        *a = *(uint64_t*)reg[RSP];
+        reg[RSP] += 8;
+        break;
+    case INSTR_STOR:
+        memcpy((void*)*a, b, *c);
+        break;
+    case INSTR_LOAD:
+        memcpy(a, (void*)*b, *c);
+        break;
+    case INSTR_ADD:
+        *a = *b + *c;
+        break;
+    case INSTR_SUB:
+        *a = *b - *c;
+        break;
+    case INSTR_MUL:
+        *a = *b * *c;
+        break;
+    case INSTR_DIV:
+        *a = *b / *c;
+        break;
+    case INSTR_MOD:
+        *a = *b % *c;
+        break;
+    case INSTR_AND:
+        *a = *b & *c;
+        break;
+    case INSTR_OR:
+        *a = *b | *c;
+        break;
+    case INSTR_XOR:
+        *a = *b ^ *c;
+        break;
+    case INSTR_SL:
+        *a = *b << *c;
+        break;
+    case INSTR_SR:
+        *a = *b >> *c;
+        break;
+    case INSTR_EQ:
+        *a = *b == *c;
+        break;
+    case INSTR_NEQ:
+        *a = *b != *c;
+        break;
+    case INSTR_GT:
+        *a = *b > *c;
+        break;
+    case INSTR_GEQ:
+        *a = *b >= *c;
+        break;
+    case INSTR_LT:
+        *a = *b < *c;
+        break;
+    case INSTR_LEQ:
+        *a = *b <= *c;
+        break;
+    case INSTR_NOT:
+        *a = !*b;
+        break;
+    case INSTR_COMP:
+        *a = ~*b;
+        break;
+    case INSTR_EXIT:
+        *exit_code = *a;
+        return 0;
+    case INSTR_SYSCALL:
+        reg[R00] = syscall(reg[R00], reg[R01], reg[R02], reg[R03], reg[R04], reg[R05]);
+        break;
+    case INSTR_PRNT:
+        putc(*a, stdout);
+        break;
+    default:
+        ERR(ERR_VM);
+    }
+
+    return 1;
+
+error:
+    return 0;
+}
+
 static void run(void)
 {
     bool running = 1;
     uint64_t exit_code = 0;
     for (; running && reg[RIP] < program.code_size; ++reg[RIP]) {
-        instr_t instr = instr_from_bin(program.code[reg[RIP]] & INSTR_MASK);
-        arg_t   arg   = program.code[reg[RIP]] & ARG_MASK;
-
-        uint64_t* a = NULL;
-        uint64_t* b = NULL;
-        uint64_t* c = NULL;
-
-        switch (arg) {
-        case ARG_N: break;
-        case ARG_L: 
-            a = &program.code[++reg[RIP]];
-            break;
-        case ARG_R: 
-            a = &reg[program.code[++reg[RIP]]];
-            break;
-        case ARG_LL: 
-            a = &program.code[++reg[RIP]];
-            b = &program.code[++reg[RIP]];
-            break;
-        case ARG_RL: 
-            a = &reg[program.code[++reg[RIP]]];
-            b = &program.code[++reg[RIP]];
-            break;
-        case ARG_LR:
-            a = &program.code[++reg[RIP]];
-            b = &reg[program.code[++reg[RIP]]];
-            break;
-        case ARG_RR:
-            a = &reg[program.code[++reg[RIP]]];
-            b = &reg[program.code[++reg[RIP]]];
-            break;
-        case ARG_LLR:
-            a = &program.code[++reg[RIP]];
-            b = &program.code[++reg[RIP]];
-            c = &reg[program.code[++reg[RIP]]];
-            break;
-        case ARG_RLR:
-            a = &program.code[++reg[RIP]];
-            b = &reg[program.code[++reg[RIP]]];
-            c = &program.code[++reg[RIP]];
-            break;
-        case ARG_LRR:
-            a = &program.code[++reg[RIP]];
-            b = &reg[program.code[++reg[RIP]]];
-            c = &reg[program.code[++reg[RIP]]];
-            break;
-        case ARG_RRR:
-            a = &reg[program.code[++reg[RIP]]];
-            b = &reg[program.code[++reg[RIP]]];
-            c = &reg[program.code[++reg[RIP]]];
-            break;
-        case ARG_LLL:
-            a = &program.code[++reg[RIP]];
-            b = &program.code[++reg[RIP]];
-            c = &program.code[++reg[RIP]];
-            break;
-        case ARG_RLL:
-            a = &reg[program.code[++reg[RIP]]];
-            b = &program.code[++reg[RIP]];
-            c = &program.code[++reg[RIP]];
-            break;
-        case ARG_LRL:
-            a = &program.code[++reg[RIP]];
-            b = &reg[program.code[++reg[RIP]]];
-            c = &program.code[++reg[RIP]];
-            break;
-        case ARG_RRL:
-            a = &reg[program.code[++reg[RIP]]];
-            b = &reg[program.code[++reg[RIP]]];
-            c = &program.code[++reg[RIP]];
-            break;
-        default:
-            ERR(ERR_VM);
-        }
-
-        switch (instr) {
-        case INSTR_MOV:
-            *a = *b;
-            break;
-        case INSTR_CMOV:
-            if (*c) {
-                *a = *b;
-            }
-            break;
-        case INSTR_LEA:
-            if (*b >= program.data_size) {
-                fprintf(stderr, "Error: static storage overflow\n");
-                ERR(ERR_VM);
-            }
-            *a = (uint64_t)(program.data + *b);
-            break;
-        case INSTR_JMP:
-            reg[RIP] = *a;
-            break;
-        case INSTR_CJMP:
-            if (*b) {
-                reg[RIP] = *a;
-            }
-            break;
-        case INSTR_CALL:
-            reg[RET] = reg[RIP];
-            reg[RIP] = *a;
-            break;
-        case INSTR_RETURN:
-            reg[RIP] = reg[RET];
-            break;
-        case INSTR_PUSH:
-            if ((char*)(reg[RSP] - 8) < stack) {
-                fprintf(stderr, "Error: stack overflow\n");
-                ERR(ERR_VM);
-            }
-            reg[RSP] -= 8;
-            *(uint64_t*)reg[RSP] = *a;
-            break;
-        case INSTR_POP:
-            if ((char*)(reg[RSP] + 8) > stack + STACK_SIZE) {
-                fprintf(stderr, "Error: stack underflow\n");
-                ERR(ERR_VM);
-            }
-
-            *a = *(uint64_t*)reg[RSP];
-            reg[RSP] += 8;
-            break;
-        case INSTR_STOR:
-            if (arg == ARG_RLL || arg == ARG_RLR) {
-                memcpy((void*)*a, b, *c);
-            } else {
-                memcpy((void*)*a, (void*)*b, *c);
-            }
-            break;
-        case INSTR_LOAD:
-            memcpy(a, (void*)*b, *c);
-            break;
-        case INSTR_ADD:
-            *a = *b + *c;
-            break;
-        case INSTR_SUB:
-            *a = *b - *c;
-            break;
-        case INSTR_MUL:
-            *a = *b * *c;
-            break;
-        case INSTR_DIV:
-            *a = *b / *c;
-            break;
-        case INSTR_MOD:
-            *a = *b % *c;
-            break;
-        case INSTR_AND:
-            *a = *b & *c;
-            break;
-        case INSTR_OR:
-            *a = *b | *c;
-            break;
-        case INSTR_XOR:
-            *a = *b ^ *c;
-            break;
-        case INSTR_SL:
-            *a = *b << *c;
-            break;
-        case INSTR_SR:
-            *a = *b >> *c;
-            break;
-        case INSTR_EQ:
-            *a = *b == *c;
-            break;
-        case INSTR_NEQ:
-            *a = *b != *c;
-            break;
-        case INSTR_GT:
-            *a = *b > *c;
-            break;
-        case INSTR_GEQ:
-            *a = *b >= *c;
-            break;
-        case INSTR_LT:
-            *a = *b < *c;
-            break;
-        case INSTR_LEQ:
-            *a = *b <= *c;
-            break;
-        case INSTR_NOT:
-            *a = !*b;
-            break;
-        case INSTR_COMP:
-            *a = ~*b;
-            break;
-        case INSTR_EXIT:
-            running = 0;
-            exit_code = *a;
-            break;
-        case INSTR_SYSCALL:
-            reg[R00] = syscall(reg[R00], reg[R01], reg[R02], reg[R03], reg[R04], reg[R05]);
-            break;
-        case INSTR_PRNT:
-            putc(*a, stdout);
-            break;
-        default:
-            ERR(ERR_VM);
-        }
+        running = run_curr_instr(&exit_code);
+        ERR_FORWARD();
     }
 
     if (exit_code != 0) {
         fprintf(stderr, "Error: exited with non zero exit code: %lu\n", exit_code);
     }
 error:
+    return;
+}
+
+void format_curr_instr(void)
+{
+    instr_t instr = instr_from_bin(program.code[reg[RIP]] & INSTR_MASK);
+    arg_t   arg   = program.code[reg[RIP]] & ARG_MASK;
+
+    printf("$ %s", instr_str_map[instr]);
+
+    switch (arg) {
+    case ARG_N: break;
+    case ARG_L: 
+        printf(" %lu", program.code[reg[RIP] + 1]);
+        break;
+    case ARG_R: 
+        printf(" %s", 
+                reg_str_map[program.code[reg[RIP] + 1]]
+            );
+        break;
+    case ARG_LL: 
+        printf(" %lu %lu", 
+                program.code[reg[RIP] + 1],
+                program.code[reg[RIP] + 2]
+            );
+        break;
+    case ARG_RL: 
+        printf(" %s %lu", 
+                reg_str_map[program.code[reg[RIP] + 1]],
+                program.code[reg[RIP] + 2]
+            );
+        break;
+    case ARG_LR:
+        printf(" %lu %s",
+                program.code[reg[RIP] + 1],
+                reg_str_map[program.code[reg[RIP] + 2]]
+            );
+        break;
+    case ARG_RR:
+        printf(" %s %s",
+                reg_str_map[program.code[reg[RIP] + 1]],
+                reg_str_map[program.code[reg[RIP] + 2]]
+            );
+        break;
+    case ARG_LLR:
+        printf(" %lu %lu %s",
+                program.code[reg[RIP] + 1],
+                program.code[reg[RIP] + 2],
+                reg_str_map[program.code[reg[RIP] + 3]]
+            );
+        break;
+    case ARG_RLR:
+        printf(" %s %lu %s",
+                reg_str_map[program.code[reg[RIP] + 1]],
+                program.code[reg[RIP] + 2],
+                reg_str_map[program.code[reg[RIP] + 3]]
+            );
+        break;
+    case ARG_LRR:
+        printf(" %lu %s %s",
+                program.code[reg[RIP] + 1],
+                reg_str_map[program.code[reg[RIP] + 2]],
+                reg_str_map[program.code[reg[RIP] + 3]]
+            );
+        break;
+    case ARG_RRR:
+        printf(" %s %s %s",
+                reg_str_map[program.code[reg[RIP] + 1]],
+                reg_str_map[program.code[reg[RIP] + 2]],
+                reg_str_map[program.code[reg[RIP] + 3]]
+            );
+        break;
+    case ARG_LLL:
+        printf(" %lu %lu %lu",
+                program.code[reg[RIP] + 1],
+                program.code[reg[RIP] + 2],
+                program.code[reg[RIP] + 3]
+            );
+        break;
+    case ARG_RLL:
+        printf(" %s %lu %lu",
+                reg_str_map[program.code[reg[RIP] + 1]],
+                program.code[reg[RIP] + 2],
+                program.code[reg[RIP] + 3]
+            );
+        break;
+    case ARG_LRL:
+        printf(" %lu %s %lu",
+                program.code[reg[RIP] + 1],
+                reg_str_map[program.code[reg[RIP] + 2]],
+                program.code[reg[RIP] + 3]
+            );
+        break;
+    case ARG_RRL:
+        printf(" %s %s %lu",
+                reg_str_map[program.code[reg[RIP] + 1]],
+                reg_str_map[program.code[reg[RIP] + 2]],
+                program.code[reg[RIP] + 3]
+            );
+        break;
+    default:
+        ERR(ERR_VM);
+    }
+
+    printf("\n\n");
+
+error:
+    return;
+}
+
+static char* triml(char* s)
+{
+    for (; isspace(*s); ++s) {  }
+    return s;
+}
+
+static char* trim(char* s)
+{
+    s = triml(s);
+    char* e = s;
+    for (; *e; ++e) {  }
+    e -= 1;
+    for (; e != s && isspace(*e); --e) {  }
+    e[1] = 0;
+    return s;
+}
+
+void debugger(void) 
+{
+    uint64_t exit_code = 0;
+    bool running = 1;
+
+    char* cmd = NULL;
+    uint64_t cmd_cap = 0;
+
+    for (; running && reg[RIP] < program.code_size; ++reg[RIP]) {
+        format_curr_instr();
+        while (1) {
+            printf("> ");
+            getline(&cmd, &cmd_cap, stdin);
+            char* s = trim(cmd);
+
+            if (strcmp(s, "n") == 0) {
+                break;
+            } else if (strncmp(s, "p", 1) == 0) {
+                s = triml(++s);
+                const char** reg_iter = reg_str_map;
+                const char** reg_end  = reg_str_map + REG_NUM;
+                for (; reg_iter != reg_end; ++reg_iter) {
+                    if (strcmp(s, *reg_iter) == 0) {
+                        break;
+                    }
+                }
+                if (reg_iter == reg_end) {
+                    printf("! Reg: '%s' unknown\n\n", s);
+                } else {
+                    printf("%s: %lu\n\n", s, reg[reg_iter - reg_str_map]);
+                }
+            } else if (strcmp(s, "q") == 0) {
+                goto end;
+            } else {
+                printf("! Cmd: '%s' unknown\n\n", s);
+            }
+        }
+        running = run_curr_instr(&exit_code);
+        ERR_FORWARD();
+    }
+
+end:
+
+    free(cmd);
+
+    return;
+
+error:
+    free(cmd);
+    fprintf(stderr, "Error: some error in vm debugger\n");
     return;
 }
 
@@ -414,6 +597,7 @@ void program_deinit(void)
 static bool flag_help      = 0;
 static bool flag_dump_asm  = 0;
 static bool flag_dump_reg  = 0;
+static bool flag_dbg       = 0;
 
 static flag_t flags[] = {
     {
@@ -435,6 +619,13 @@ static flag_t flags[] = {
         .long_identifier  = "reg",
         .description      = "dump the register after running and exit",
         .target           = &flag_dump_reg,
+        .type             = FLAG_BOOL,
+    },
+    {
+        .short_identifier = 0,
+        .long_identifier  = "dbg",
+        .description      = "open debugger for given program",
+        .target           = &flag_dbg,
         .type             = FLAG_BOOL,
     },
 };
@@ -468,6 +659,11 @@ int main(int argc, char** argv)
 
     if (flag_dump_asm) {
         dump_asm();
+        goto end;
+    }
+
+    if (flag_dbg) {
+        debugger();
         goto end;
     }
 
