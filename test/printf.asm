@@ -1,6 +1,5 @@
 jmp main
 
-
 printf: # char* fmt string ...
     .@buf: char[1024] default
     # r00 fmt_string
@@ -29,18 +28,17 @@ printf: # char* fmt string ...
         jmp  .loop
 
 .end:
-    mov r02 r03
-    lea r02 .@buf
-    mov r00 1
-    mov r01 1
-    syscall
-
+    mov r03 r02
+    lea r02 .@buf       
+    mov r00 1           
+    mov r01 1           
+    syscall                 # SYSCALL( WRITE, STDOUT, .@buf, buf_len )
+    
     pop r04
     pop r03
     pop r02
     pop r01
     return
-    
 
 main:
     .@fmt_str: char[100] "Hello World!\n\0"
