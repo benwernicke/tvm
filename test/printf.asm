@@ -1,5 +1,3 @@
-jmp main
-
 printf: # char* fmt string ...
     .@buf: char[1024] default
     # r00 fmt_string

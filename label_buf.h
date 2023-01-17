@@ -7,7 +7,7 @@
 typedef struct label_buf_pair_t label_buf_pair_t;
 struct label_buf_pair_t {
     char* label;
-    uint64_t* pos;
+    uint64_t pos;
 };
 
 typedef struct label_buf_t label_buf_t;

@@ -184,6 +184,10 @@ int flag_parse(const int argc, char** argv, flag_t* flags, uint32_t flags_len,
         }
     }
 
+    if (*dest_argc) {
+        (*dest_argv)[*dest_argc] = NULL;
+    }
+
     return e;
 }
 

@@ -353,16 +353,6 @@ static void asm_free(asm_t* a)
     }
 }
 
-static void* rptr_create(void* b, void* t)
-{
-    return (void*)((char*)t - (char*)b - 1);
-}
-
-static void* rptr_get(void* b, void* t)
-{
-    return (void*)((uintptr_t)b + (uintptr_t)t + 1);
-}
-
 static void asm_data_init(uint64_t* line_number, char* data, uint64_t data_size, char* s, char** start, char** end)
 {
     s = trim_comments(line_number, s);
@@ -421,6 +411,26 @@ error:
     return;
 }
 
+static void resolve_labels(asm_t* a)
+{
+    label_buf_pair_t* iter = label_buf_begin(a->label_buf);
+    label_buf_pair_t* end  = label_buf_end(a->label_buf);
+    for (; iter != end; ++iter) {
+        uint64_t* p = map_get(a->label_map, iter->label);
+        if (!p) {
+            fprintf(stderr, "Error: unknown label '%s'\n", iter->label);
+            // TODO line number
+            ERR(ERR_ASSEMBLER);
+        }
+        a->code[iter->pos] = *p;
+    }
+
+    return;
+
+error:
+    return;
+}
+
 static asm_t* asm_from_file(char* path)
 {
     char*    file_content = NULL;
@@ -459,7 +469,8 @@ static asm_t* asm_from_file(char* path)
         if (token_is_instruction(s, e)) {
             instr_t  instr              = token_get_instruction(s, e);
             int      arg_types[3]       = { -1, -1, -1 };
-            label_buf_pair_t* labels[3] = { 0 };
+            uint64_t labels[3] = { 0 };
+            memset(labels, 0xFF, sizeof(labels));
             uint64_t args[3]            = { 0 };
             uint64_t i                  = 0;
             for (; i < instr_arg_num_map[instr]; ++i) {
@@ -481,7 +492,7 @@ static asm_t* asm_from_file(char* path)
                     ERR_IF(!p, ERR_BAD_MALLOC);
 
                     char* l   = NULL;
-                    labels[i] = rptr_create(a->label_buf->buf, p);
+                    labels[i] = a->label_buf->size - 1;
 
                     if (*s == ':') {
                         uint64_t len = strlen(path) + (e - s) + 1;
@@ -534,8 +545,8 @@ static asm_t* asm_from_file(char* path)
                 n = asm_more(a);
                 ERR_FORWARD();
                 *n = args[i];
-                if (labels[i]) {
-                    ((label_buf_pair_t*)rptr_get(a->label_buf->buf, labels[i]))->pos = rptr_create(a->code, n);
+                if (labels[i] != 0xFFFFFFFFFFFFFFFFUL) {
+                    a->label_buf->buf[labels[i]].pos = a->code_size - 1;
                 }
             }
         } else if (token_is_label(s, e)) {
@@ -601,22 +612,6 @@ static asm_t* asm_from_file(char* path)
 
     free(file_content);
 
-    // resolve file internal labels
-    {
-        label_buf_pair_t* iter = label_buf_begin(a->label_buf);
-        label_buf_pair_t* end  = label_buf_end(a->label_buf);
-        for (; iter != end; ++iter) {
-            uint64_t* p = map_get(a->label_map, iter->label);
-            if (!p) {
-                fprintf(stderr, "Error: unknown label '%s'\n", iter->label);
-                // TODO line number
-                ERR(ERR_ASSEMBLER);
-            }
-            *(uint64_t*)rptr_get(a->code, iter->pos) = *p;
-            // TODO remove resolved pairs
-        }
-    }
-
     return a;
 
 error:
@@ -625,6 +620,110 @@ error:
     return NULL;
 }
 
+void asm_link(asm_t* dest, asm_t* src)
+{
+    // join label buf
+    {
+        label_buf_pair_t* i = label_buf_begin(src->label_buf);
+        label_buf_pair_t* e = label_buf_end(src->label_buf);
+        for (; i != e; ++i) {
+            label_buf_pair_t* p = label_buf_more(dest->label_buf);
+            ERR_IF(!p, ERR_BAD_MALLOC);
+            *p = *i;
+            p->pos += dest->code_size;
+        }
+        label_buf_free(src->label_buf);
+    }
+
+    // join label maps
+    {
+        uintptr_t i = map_begin(src->label_map);
+        uintptr_t e = map_end(src->label_map);
+
+        for (; i != e; i = map_next(src->label_map, i)) {
+            char* key    = *map_iter_key(src->label_map, i);
+            uint64_t val = *map_iter_value(src->label_map, i);
+
+            if (map_contains(dest->label_map, key)) {
+                fprintf(stderr, "Error in Linker: Multiple definitions of label: '%s'\n", key);
+                ERR(ERR_ASSEMBLER);
+            }
+
+            if (strchr(key, '@')) {
+                val += dest->data_size;
+            } else {
+                val += dest->code_size;
+            }
+
+            int e = map_insert(dest->label_map, key, val);
+            ERR_IF(e, ERR_BAD_MALLOC);
+        }
+        map_free(src->label_map);
+    }
+
+    // join code segment
+    {
+        if (src->code) {
+            dest->code_cap += src->code_size;
+            dest->code = realloc(dest->code, dest->code_cap * sizeof(*dest->code));
+            ERR_IF(!dest->code, ERR_BAD_MALLOC);
+            memcpy(dest->code + dest->code_size, src->code, src->code_size * sizeof(*src->code));
+            dest->code_size += src->code_size;
+            free(src->code);
+        }
+    }
+
+    // join data segment
+    {
+        if (src->data) {
+            dest->data_cap += src->data_size;
+            dest->data = realloc(dest->data, dest->data_cap * sizeof(*dest->data));
+            ERR_IF(!dest->data, ERR_BAD_MALLOC);
+            memcpy(dest->data + dest->data_size, src->data, src->data_size * sizeof(*src->data));
+            dest->data_size += src->data_size;
+            free(src->data);
+        }
+    }
+
+    free(src);
+
+error:
+    return;
+}
+
+static asm_t* asm_default(void)
+{
+    asm_t* a = calloc(1, sizeof(*a));
+    ERR_IF(!a, ERR_BAD_MALLOC);
+    a->label_map = map_create();
+    a->label_buf = label_buf_create();
+    ERR_IF(!a->label_map || !a->label_buf, ERR_BAD_MALLOC);
+
+    uint64_t* n = asm_more(a);
+    ERR_IF(!n, ERR_BAD_MALLOC);
+
+    *n = instr_bin_map[INSTR_JMP] | arg_bin_map[ARG_L];
+
+    n = asm_more(a);
+    ERR_IF(!n, ERR_BAD_MALLOC);
+
+    label_buf_pair_t* p = label_buf_more(a->label_buf);
+    ERR_IF(!p, ERR_BAD_MALLOC);
+    p->label = strdup("main");
+    p->pos   = 1;
+
+    return a;
+
+error:
+    if (a) { 
+        free(a->label_map);
+        free(a->label_buf);
+        free(a->code);
+        free(a->data);
+        free(a);
+    }
+    return NULL;
+}
 
 static void asm_to_file(asm_t* a, char* path)
 {
@@ -684,21 +783,30 @@ int main(int argc, char** argv)
         }
     }
 
-    asm_t* a = asm_from_file(argv[1]);
+    asm_t* main_asm = asm_default();
 
-    if (err_get() != ERR_OK) {
-        err_format(stderr);
-        exit(1);
+    // iterate over all source files
+    {
+        char** iter = argv + 1;
+        char** end  = argv + argc;
+        for (; iter != end; ++iter) {
+            asm_t* a = asm_from_file(*iter);
+            ERR_FORWARD();
+            asm_link(main_asm, a);
+            ERR_FORWARD();
+        }
     }
 
-    asm_to_file(a, output_file);
+    resolve_labels(main_asm);
 
-    if (err_get() != ERR_OK) {
-        err_format(stderr);
-        exit(1);
-    }
+    asm_to_file(main_asm, output_file);
+    ERR_FORWARD();
 
-    asm_free(a);
+    asm_free(main_asm);
 
     return 0;
+
+error:
+    err_format(stderr);
+    return 1;
 }
