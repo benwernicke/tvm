@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdbool.h>
+#include <errno.h>
 
 #include "def.h"
 #include "err.h"
@@ -356,27 +357,15 @@ static void asm_free(asm_t* a)
 static void asm_data_init(uint64_t* line_number, char* data, uint64_t data_size, char* s, char** start, char** end)
 {
     s = trim_comments(line_number, s);
-    if (!*s) {
-        fprintf(stderr, "Error: expected storage initializer and got nothing\n");
-        fprintf(stderr, "\tat line %lu\n", *line_number);
-        ERR(ERR_ASSEMBLER);
-    }
+    ERR_IF_MSG(!*s, ERR_ASSEMBLER, "expected storage initializer and got nothing\n\tat line %lu\n", *line_number);
 
     if (*s == '"') {
         s += 1;
         *start = s;
         for(; *s && *s != '\n' && *s != '"'; ++s) { }
         *end = s;
-        if (!*s || *s == '\n') {
-            fprintf(stderr, "Error: no matching '\"'\n");
-            fprintf(stderr, "\tat line %lu\n", *line_number);
-            ERR(ERR_ASSEMBLER);
-        }
-        if (end - start > data_size) {
-            fprintf(stderr, "Error: storage is not big enough\n");
-            fprintf(stderr, "\tat line %lu\n", *line_number);
-            ERR(ERR_ASSEMBLER);
-        }
+        ERR_IF_MSG(!*s || *s == '\n', ERR_ASSEMBLER, "no mathing '\"'\n\tat line %lu\n", *line_number);
+        ERR_IF_MSG(end - start > data_size, ERR_ASSEMBLER, "storage is not big enough\n\tat line %lu\n", *line_number);
         char* s = *start;
         for (; s != *end; ++s) {
             if (*s == '\\') {
@@ -417,11 +406,8 @@ static void resolve_labels(asm_t* a)
     label_buf_pair_t* end  = label_buf_end(a->label_buf);
     for (; iter != end; ++iter) {
         uint64_t* p = map_get(a->label_map, iter->label);
-        if (!p) {
-            fprintf(stderr, "Error: unknown label '%s'\n", iter->label);
-            // TODO line number
-            ERR(ERR_ASSEMBLER);
-        }
+        // TODO linenumber
+        ERR_IF_MSG(!p, ERR_ASSEMBLER, "unknown label '%s'\n", iter->label);
         a->code[iter->pos] = *p;
     }
 
@@ -460,10 +446,7 @@ static asm_t* asm_from_file(char* path)
     char* s;
     char* e;
     get_token(&line_number, &ip, file_content, &s, &e);
-    if (!s) {
-        fprintf(stderr, "Error: file 's' seems to be empty\n");
-        ERR(ERR_ASSEMBLER);
-    }
+    ERR_IF_MSG(!s, ERR_ASSEMBLER, "file '%s' seems to be empty\n", path);
 
     do {
         if (token_is_instruction(s, e)) {
@@ -586,17 +569,16 @@ static asm_t* asm_from_file(char* path)
             if (is_mem_label) {
                 get_token(&line_number, &ip, e, &s, &e);
                 ip -= 1; // we dont need ip
-                if (!token_is_type_identifier(s, e)) {
-                    fprintf(stderr, "Error: expected type identifier after storage label '%s'\n", l);
-                    fprintf(stderr, "\tat line %lu\n", line_number);
-                    ERR(ERR_ASSEMBLER);
-                }
+                ERR_IF_MSG(!token_is_type_identifier(s, e), 
+                           ERR_ASSEMBLER, 
+                           "expected type identifier after storage label '%s'\n\tat line %lu\n", l, line_number);
                 uint64_t mem_size = token_get_type_identifier_size(s, e);
 
                 int err = map_insert(a->label_map, l, a->data_size);
                 char* d = asm_data_more(a, mem_size);
                 ERR_IF(!d || err, ERR_BAD_MALLOC);
                 asm_data_init(&line_number, d, mem_size, e, &s, &e);
+                ERR_FORWARD();
             } else {
                 int err = map_insert(a->label_map, l, ip - 1);
                 ERR_IF(err, ERR_BAD_MALLOC);
@@ -710,25 +692,20 @@ static asm_t* asm_default(void)
     label_buf_pair_t* p = label_buf_more(a->label_buf);
     ERR_IF(!p, ERR_BAD_MALLOC);
     p->label = strdup("main");
+    ERR_IF(!p, ERR_BAD_MALLOC);
     p->pos   = 1;
 
     return a;
 
 error:
-    if (a) { 
-        free(a->label_map);
-        free(a->label_buf);
-        free(a->code);
-        free(a->data);
-        free(a);
-    }
+    asm_free(a);
     return NULL;
 }
 
 static void asm_to_file(asm_t* a, char* path)
 {
     FILE* f = fopen(path, "wb");
-    ERR_IF(!f, ERR_FILE);
+    ERR_IF_MSG(!f, ERR_FILE, "could not open '%s': %s", path, strerror(errno));
     fwrite(&a->code_size, 1, sizeof(a->code_size), f);
     fwrite(&a->data_size, 1, sizeof(a->data_size), f);
     fwrite(a->code, sizeof(*a->code), a->code_size, f);
@@ -784,6 +761,7 @@ int main(int argc, char** argv)
     }
 
     asm_t* main_asm = asm_default();
+    ERR_FORWARD();
 
     // iterate over all source files
     {
@@ -791,9 +769,9 @@ int main(int argc, char** argv)
         char** end  = argv + argc;
         for (; iter != end; ++iter) {
             asm_t* a = asm_from_file(*iter);
-            ERR_FORWARD();
+            ERR_FORWARD_MSG("in assembler");
             asm_link(main_asm, a);
-            ERR_FORWARD();
+            ERR_FORWARD_MSG("in linker");
         }
     }
 

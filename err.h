@@ -36,6 +36,30 @@ void  err_format(FILE* stream);
         }               \
     }while(0)
 
+#define ERR_MSG_(...)                   \
+    do {                                \
+        fprintf(stderr, "Error: ");     \
+        fprintf(stderr, __VA_ARGS__);   \
+        putc('\n', stderr);             \
+    } while (0)
+
+
+#define ERR_IF_MSG(b, e, ...)       \
+    do {                            \
+        if (b) {                    \
+            ERR_MSG_(__VA_ARGS__);  \
+            ERR(e);                 \
+        }                           \
+    } while (0)
+
+#define ERR_FORWARD_MSG(...)        \
+    do {                            \
+        if (err_get() != ERR_OK) {  \
+            ERR_MSG_(__VA_ARGS__);  \
+            goto error;             \
+        }                           \
+    } while (0)
+
 extern const char* err_str_map[];
 extern const uint64_t err_maps_size;
 
