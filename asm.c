@@ -202,7 +202,7 @@ static uint64_t token_get_type_identifier_size(char* s, char* e)
             *e = 0;
             r = 2 * atol(s);
         } else {
-            r = 1;
+            r = 2;
         }
         goto end;
     } else if(strncmp(s, "u32", 3) == 0) {
@@ -212,7 +212,7 @@ static uint64_t token_get_type_identifier_size(char* s, char* e)
             *e = 0;
             r = 4 * atol(s);
         } else {
-            r = 1;
+            r = 4;
         }
         goto end;
     } else if(strncmp(s, "u64", 3) == 0) {
@@ -222,7 +222,7 @@ static uint64_t token_get_type_identifier_size(char* s, char* e)
             *e = 0;
             r = 8 * atol(s);
         } else {
-            r = 1;
+            r = 8;
         }
         goto end;
     }
@@ -723,6 +723,7 @@ error:
 }
 
 static bool  flag_help   = 0;
+static bool  flag_nolink = 0;
 static char* output_file = "a.out";
 
 static flag_t flags[] = {
@@ -739,6 +740,13 @@ static flag_t flags[] = {
         .description      = "output file",
         .target           = &output_file,
         .type             = FLAG_STR,
+    },
+    {
+        .short_identifier = 0,
+        .long_identifier  = "nolink",
+        .description      = "do not link this file and do not expect main as entry point",
+        .target           = &flag_nolink,
+        .type             = FLAG_BOOL,
     },
 };
 
@@ -760,18 +768,25 @@ int main(int argc, char** argv)
         }
     }
 
-    asm_t* main_asm = asm_default();
-    ERR_FORWARD();
+    asm_t* main_asm = NULL;
+    if (flag_nolink) {
+        main_asm = asm_from_file(argv[1]);
+        ERR_FORWARD();
+    } else {
 
-    // iterate over all source files
-    {
-        char** iter = argv + 1;
-        char** end  = argv + argc;
-        for (; iter != end; ++iter) {
-            asm_t* a = asm_from_file(*iter);
-            ERR_FORWARD_MSG("in assembler");
-            asm_link(main_asm, a);
-            ERR_FORWARD_MSG("in linker");
+        main_asm = asm_default();
+        ERR_FORWARD();
+
+        // iterate over all source files
+        {
+            char** iter = argv + 1;
+            char** end  = argv + argc;
+            for (; iter != end; ++iter) {
+                asm_t* a = asm_from_file(*iter);
+                ERR_FORWARD_MSG("in assembler");
+                asm_link(main_asm, a);
+                ERR_FORWARD_MSG("in linker");
+            }
         }
     }
 
@@ -785,6 +800,7 @@ int main(int argc, char** argv)
     return 0;
 
 error:
+    asm_free(main_asm);
     err_format(stderr);
     return 1;
 }

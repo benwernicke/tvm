@@ -40,10 +40,12 @@ typedef enum {
     INSTR_COMP,
     INSTR_EXIT,
     INSTR_SYSCALL,
+    INSTR_INC,
+    INSTR_DEC,
     INSTR_PRNT,
 } instr_t;
 
-#define INSTR_NUM 32
+#define INSTR_NUM 34
 
 typedef enum {
     R00 = 0,

@@ -78,6 +78,8 @@ const char* instr_str_map[] = {
     [INSTR_COMP]    = "comp",
     [INSTR_EXIT]    = "exit",
     [INSTR_SYSCALL] = "syscall",
+    [INSTR_INC]     = "inc",
+    [INSTR_DEC]     = "dec",
     [INSTR_PRNT]    = "prnt",
 };
 
@@ -113,7 +115,9 @@ const uint64_t instr_bin_map[] = {
     [INSTR_COMP]    = 28 << 8,
     [INSTR_EXIT]    = 29 << 8,
     [INSTR_SYSCALL] = 30 << 8,
-    [INSTR_PRNT]    = 31 << 8,
+    [INSTR_INC]     = 31 << 8,
+    [INSTR_DEC]     = 32 << 8,
+    [INSTR_PRNT]    = 33 << 8,
 };
 
 const arg_t instr_arg_map[][INSTR_ARG_MAX] = {
@@ -148,6 +152,8 @@ const arg_t instr_arg_map[][INSTR_ARG_MAX] = {
     [INSTR_COMP]    = { ARG_RL, ARG_RR },
     [INSTR_EXIT]    = { ARG_R, ARG_L },
     [INSTR_SYSCALL] = { ARG_N },
+    [INSTR_INC]     = { ARG_R },
+    [INSTR_DEC]     = { ARG_R },
     [INSTR_PRNT]    = { ARG_R, ARG_L },
 };
 
@@ -183,6 +189,8 @@ const uint64_t instr_arg_num_map[] = {
     [INSTR_COMP]    = 2,
     [INSTR_EXIT]    = 1,
     [INSTR_SYSCALL] = 0,
+    [INSTR_INC]     = 1,
+    [INSTR_DEC]     = 1,
     [INSTR_PRNT]    = 1,
 };
 
@@ -218,6 +226,8 @@ const uint64_t instr_arg_max_permutation[] = {
     [INSTR_COMP]    = 2,
     [INSTR_EXIT]    = 2,
     [INSTR_SYSCALL] = 1,
+    [INSTR_INC]     = 1,
+    [INSTR_DEC]     = 1,
     [INSTR_PRNT]    = 2,
 };
 

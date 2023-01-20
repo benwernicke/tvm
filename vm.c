@@ -262,6 +262,12 @@ static bool run_curr_instr(uint64_t* exit_code)
     }
 
     switch (instr) {
+    case INSTR_INC:
+            *a += 1;
+        break;
+    case INSTR_DEC:
+            *a -= 1;
+        break;
     case INSTR_MOV:
         *a = *b;
         break;
@@ -313,7 +319,21 @@ static bool run_curr_instr(uint64_t* exit_code)
         memcpy((void*)*a, b, *c);
         break;
     case INSTR_LOAD:
-        memcpy(a, (void*)*b, *c);
+        // matching required too allow for:
+            // load r00 r00 8
+            // load r00 r01 r00
+        if (a == b) {
+            void* t = (void*)*b;
+            *a = 0;
+            memcpy(a, t, *c);
+        } else if (a == c) {
+            uint64_t t = *c;
+            *a = 0;
+            memcpy(a, (void*)*b, t);
+        } else {
+            *a = 0;     // if less than 8 byte loaded it should be that value
+            memcpy(a, (void*)*b, *c);
+        }
         break;
     case INSTR_ADD:
         *a = *b + *c;
@@ -520,6 +540,7 @@ static char* triml(char* s)
 static char* trim(char* s)
 {
     s = triml(s);
+    if (!*s) return s;
     char* e = s;
     for (; *e; ++e) {  }
     e -= 1;
@@ -543,7 +564,9 @@ void debugger(void)
             getline(&cmd, &cmd_cap, stdin);
             char* s = trim(cmd);
 
-            if (strcmp(s, "n") == 0) {
+            if (!*s) {
+                continue;
+            } else if (strcmp(s, "n") == 0) {
                 break;
             } else if (strncmp(s, "p", 1) == 0) {
                 s = triml(++s);

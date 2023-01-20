@@ -1,5 +1,3 @@
-jmp main
-
 print_str: # ptr len
     push r02
     push r03

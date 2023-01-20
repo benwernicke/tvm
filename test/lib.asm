@@ -1,88 +1,122 @@
-printi_uint: # u64 -> u64
-        .@buf: char[64] default
-        push r01
-        push r02
-        push r03
+:@buf:     char[1024] default
+:@buf_len: u64        default
 
-        eq  r01 r00 0
-        cjmp .zero r01
-        lea r01 .@buf
-        push ret
-        call .helper
-        pop ret
-        jmp .end
-
-        .zero:
-            lea r01 .@buf
-            mov r02 0
-            stor r01 r02 1
-            add  r01 r01 1
-            stor r01 0 1
-            jmp .end
-
-        .end:
-            lea r02 .@buf           # r02 = .@buf
-
-            push ret
-            call strlen             #r00 = strlen(.@buf)
-            pop ret
-
-            mov r03 r00             # r03 = strlen(.@buf)
-            mov r00 1
-            mov r01 1
-
-            syscall             # syscall(SYS_WRITE, STDOUT, .@buf, strlen(.@buf))
-
-            pop r03
-            pop r02
-            pop r01
-            return
-
-        .helper: # u64, char* -> char*
-            push r02
-
-            
-
-
-
-strlen: # r00 is cstr -> uint64_t
+print_cstr: # s: char* -> char*
     push r01
     push r02
+    push r03
+    push r04
 
-    .loop:
-        load r01 r00 1
-        add  r00 r00 1
-        eq   r01 r01 0
-        cjmp .end r01
-        add  r02 r02 1
-        jmp .loop
+    mov r01 r00     # safe s for later
+    mov r04 r01
 
-.end:
-    mov r00 r02
+    push ret
+    call strlen     # get strlen(s)
+    call :check_flush
+                    # r00: sz, r01: s and buf has enough space
+
+    mov r02 r00     # r02 = sz
+
+    # load buffer with offset
+    lea r00 :@buf
+    lea r03 :@buf_len
+    load r03 r03 8
+    add r00 r00 r03
+
+    call memcpy
+
+    add r03 r03 r02
+    lea r00 :@buf_len
+    stor r00 r03 8
+
+    mov r00 r04     # for return
+
+    pop ret
+    pop r04
+    pop r03
     pop r02
     pop r01
     return
 
-printi_str: # r00 is cstr -> cstr
+
+
+memcpy: # d: void*, s: void*, sz: u64 -> none
+        push r03     # num currently pushed
+        push r04     # intermediate value
+        push r05     # for equailty
+        mov r03 0
+
+        .loop:
+            geq r05 r03 r02  # r05 = r03 >= r02
+            cjmp .end r05    # end loop if so
+            load r04 r01 1  
+            stor r00 r04 1   # copy on byte from r01 to r00
+            inc r00
+            inc r01
+            inc r03          # increcment all pointer
+            jmp .loop
+
+    .end:
+        pop r05
+        pop r04
+        pop r03
+        return
+
+flush: # none -> none
+    push r00
     push r01
-    mov  r01 r00        # cstr in r01
-
-    push ret
-    call strlen         # strlen(cstr) in r00
-    pop ret
-
     push r02
     push r03
 
-    mov r02 r01
-    mov r03 r00
     mov r00 1
     mov r01 1
+    lea r02 :@buf
+    lea r03 :@buf_len
+    load r03 r03 8
 
     syscall
 
-    mov r00 r02
+    lea r03 :@buf_len
+    stor r03 0 8
 
     pop r03
     pop r02
     pop r01
+    pop r00
+    return
+
+:check_flush: # sz: u64 -> u64
+        push r01
+        
+        lea r01 :@buf_len
+        load r01 r01 8
+        add r01 r01 r00
+        geq r01 r01 1024
+        cjmp .call_flush r01
+
+    .end:
+        pop r01
+        return
+
+    .call_flush:
+        push ret
+        call flush
+        pop ret
+        jmp .end
+
+strlen: # s: char* -> u64
+        push r01
+        push r02
+
+        .loop:
+            load r01 r00 1      # r01 = *s
+            inc  r00            # s++
+            eq   r01 r01 0      # r01 = r01 == 0;
+            cjmp .end r01
+            inc  r02 
+            jmp .loop
+    .end:
+        mov r00 r02 
+        pop r02
+        pop r01
+        return
